@@ -52,6 +52,9 @@ export default function NewProjectForm() {
 
         {/* Form */}
         <form action={action} className="relative z-10 space-y-5">
+          {/* ✅ Hidden input - always use "blank" template */}
+          <input type="hidden" name="templateId" value="blank" />
+
           {/* Title Input */}
           <div className="relative group/input">
             <input

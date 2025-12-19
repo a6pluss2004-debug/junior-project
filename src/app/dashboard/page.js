@@ -5,6 +5,7 @@ import { getUserProjects } from '@/app/actions/project';
 import LogoutButton from '@/components/LogoutButton';
 import NewProjectForm from '@/components/NewProjectForm';
 import Link from 'next/link';
+import DeleteProjectButton from '@/components/DeleteProjectButton';
 
 export default async function DashboardPage() {
   // 1. Auth Check
@@ -97,17 +98,22 @@ export default async function DashboardPage() {
             ) : (
               <div className="grid gap-6 sm:grid-cols-2">
                 {projects.map((project, index) => (
-                  <Link 
+                  <div 
                     key={project.id} 
-                    href={`/dashboard/project/${project.id}`}
-                    className="block group animate-fade-in-up"
+                    className="group animate-fade-in-up relative"
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
                     <div className="relative h-full">
                       <div className="absolute -inset-[1px] bg-gradient-to-r from-[#78e0dc]/50 via-[#ff8d4c]/50 to-[#3d348b]/50 rounded-2xl opacity-0 group-hover:opacity-100 blur-lg transition-all duration-500"></div>
                       <div className="relative h-full rounded-2xl bg-gradient-to-br from-white/[0.15] to-white/[0.05] backdrop-blur-xl border border-white/20 p-6 shadow-xl transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-2xl overflow-hidden">
                         <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-                        <div className="relative z-10">
+                        
+                        {/* Delete button - bottom-right */}
+                        <div className="absolute bottom-4 right-4 z-20">
+                          <DeleteProjectButton projectId={project.id} />
+                        </div>
+
+                        <Link href={`/dashboard/project/${project.id}`} className="block relative z-10">
                           <div className="flex items-start justify-between mb-4">
                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ff8d4c] to-[#ff6b35] flex items-center justify-center shadow-lg shadow-[#ff8d4c]/30 group-hover:scale-110 transition-transform duration-300">
                               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,10 +138,10 @@ export default async function DashboardPage() {
                             </svg>
                             Created {new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
-                        </div>
+                        </Link>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
