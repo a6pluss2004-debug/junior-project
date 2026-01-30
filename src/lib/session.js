@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 
 // These keys should be in your .env.local file
-const secretKey = process.env.SESSION_SECRET || 'your-fallback-secret-key';
+const secretKey = process.env.SESSION_SECRET || 'secret-key';
 const encodedKey = new TextEncoder().encode(secretKey);
 
 // --- Create the Session Cookie ---
@@ -26,3 +26,4 @@ export async function decrypt(session) {
     return null;
   }
 }
+ 

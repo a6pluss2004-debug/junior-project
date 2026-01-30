@@ -66,7 +66,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     () => columns.sort((a, b) => a.order - b.order).map((c) => c.key),
     [columns]
   );
-
+   //deadline
   function isOverdue(deadline) {
     if (!deadline) return false;
     return new Date(deadline) < new Date();
@@ -84,7 +84,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     if (diffDays === 1) return 'Tomorrow';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
-
+    //drag and drop
   async function onDragEnd(result) {
     const { destination, source, draggableId, type } = result;
     if (!destination) return;
@@ -92,7 +92,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     if (destination.droppableId === source.droppableId && destination.index === source.index) {
       return;
     }
-
+    // Drag Column
     if (type === 'COLUMN') {
       const newColumnOrder = Array.from(orderedColumnKeys);
       newColumnOrder.splice(source.index, 1);
@@ -108,7 +108,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     const startKey = source.droppableId;
     const finishKey = destination.droppableId;
     let updatedTasks = tasks;
-
+    // Drag Task inside col
     if (startKey === finishKey) {
       const colTasks = columnMap[startKey].tasks.slice();
       const [moved] = colTasks.splice(source.index, 1);
@@ -119,6 +119,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
         return { ...task, order: idx };
       });
       setTasks(updatedTasks);
+      // Drag Task to another col
     } else {
       const startTasks = columnMap[startKey].tasks.slice();
       const finishTasks = columnMap[finishKey].tasks.slice();
@@ -139,7 +140,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
       });
       setTasks(updatedTasks);
     }
-
+    // save in database
     const movedTask = updatedTasks.find((t) => t.id === draggableId);
     if (movedTask) {
       updateTaskPosition({
@@ -425,7 +426,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                   {provided.placeholder}
 
                   <div className="shrink-0">
-                    <AddColumnForm projectId={project.id} onCreated={handleColumnCreated} />
+                    <dumnForm projectId={project.id} onCreated={handleColumnCreated} />
                   </div>
                 </div>
               )}

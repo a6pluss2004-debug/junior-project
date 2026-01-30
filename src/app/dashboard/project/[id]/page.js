@@ -1,9 +1,7 @@
 import { getProject } from '@/app/actions/project';
 import { getTasks } from '@/app/actions/task';
 import { redirect } from 'next/navigation';
-import BoardClient from './BoardClient'; // ✅ Normal import
-
-// NEW
+import BoardClient from './BoardClient'; 
 import connectDB from '@/lib/db';
 import Column from '@/models/Column';
 
@@ -18,7 +16,7 @@ export default async function ProjectBoardPage({ params }) {
   // Load tasks as before
   const tasks = await getTasks(id);
 
-  // NEW: load columns for this project from DB
+  // load columns for this project from DB
   await connectDB();
   const columns = await Column.find({ projectId: id })
     .sort({ order: 1 })
@@ -31,7 +29,7 @@ export default async function ProjectBoardPage({ params }) {
     order: c.order,
   }));
 
-  // ✅ IMPORTANT: Convert deadline Date to ISO string
+  // Convert deadline Date to ISO string
   const tasksWithFormattedDeadline = tasks.map((t) => ({
     ...t,
     deadline: t.deadline ? new Date(t.deadline).toISOString() : null,
