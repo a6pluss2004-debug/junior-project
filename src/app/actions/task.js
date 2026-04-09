@@ -7,12 +7,33 @@ import { decrypt } from '@/lib/session';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import mongoose from 'mongoose';
+import ProjectMember from '@/models/ProjectMember';
 
 // Helper: Get Session
 async function getSession() {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get('session')?.value;
   return await decrypt(sessionCookie);
+}
+
+// Helper: Verify Project Access (Owner OR Member)
+async function verifyProjectAccess(projectId, userId, userEmail) {
+  // 1. Check ownership
+  const project = await Project.findOne({
+    _id: projectId,
+    ownerId: String(userId),
+  });
+
+  if (project) return true;
+
+  // 2. Check membership
+  const member = await ProjectMember.findOne({
+    projectId,
+    $or: [{ userId: String(userId) }, { userEmail: userEmail }],
+    status: 'active',
+  });
+
+  return !!member;
 }
 
 // 1. Create a Task
@@ -33,13 +54,10 @@ export async function createTask(formData) {
   try {
     await connectDB();
 
-    // Verify the user owns this project
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: String(session.userId),
-    });
+    // Verify access
+    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!project) {
+    if (!hasAccess) {
       return { error: 'Project not found or access denied' };
     }
 
@@ -60,7 +78,7 @@ export async function createTask(formData) {
     });
 
     revalidatePath(`/dashboard/project/${projectId}`);
-    
+
     // ✅ RETURN THE CREATED TASK
     return {
       success: true,
@@ -89,12 +107,10 @@ export async function getTasks(projectId) {
     await connectDB();
 
     // Verify access
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: String(session.userId),
-    });
+    // Verify access
+    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!project) return [];
+    if (!hasAccess) return [];
 
     const tasks = await Task.find({ projectId }).sort({ order: 1 });
 
@@ -122,12 +138,10 @@ export async function deleteTask(taskId, projectId) {
     await connectDB();
 
     // Verify ownership
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: String(session.userId),
-    });
+    // Verify access
+    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!project) return { error: 'Access denied' };
+    if (!hasAccess) return { error: 'Access denied' };
 
     await Task.findByIdAndDelete(taskId);
 
@@ -153,11 +167,9 @@ export async function updateTaskPosition({ taskId, projectId, column, order }) {
     await connectDB();
 
     // Ensure user owns the project
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: String(session.userId),
-    });
-    if (!project) return { error: 'Access denied' };
+    // Verify access
+    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
+    if (!hasAccess) return { error: 'Access denied' };
 
     await Task.findByIdAndUpdate(taskId, {
       column,
@@ -184,12 +196,10 @@ export async function updateTask({ taskId, projectId, title, description, deadli
     await connectDB();
 
     // Verify the user owns this project
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: String(session.userId),
-    });
+    // Verify access
+    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!project) {
+    if (!hasAccess) {
       return { error: 'Project not found or access denied' };
     }
 
@@ -208,7 +218,7 @@ export async function updateTask({ taskId, projectId, title, description, deadli
     }
 
     revalidatePath(`/dashboard/project/${projectId}`);
-    
+
     return {
       success: true,
       task: {

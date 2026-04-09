@@ -2,6 +2,7 @@
 
 import connectDB from '@/lib/db';
 import Project from '@/models/Project';
+import ProjectMember from '@/models/ProjectMember';
 import { decrypt } from '@/lib/session';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -91,21 +92,53 @@ export async function createProject(prevState, formData) {
   }
 }
 
-// ✅ NEW: Get all projects owned by a user (for dashboard)
+// ✅ NEW: Get all projects (owned + member)
 export async function getProjects(userId) {
   try {
     await connectDB();
+    const session = await getSession();
+    const userEmail = session?.email;
 
-    const projects = await Project.find({ 
+    // 1. Get owned projects
+    const ownedProjects = await Project.find({
       ownerId: new mongoose.Types.ObjectId(String(userId))
     }).sort({ createdAt: -1 });
 
-    return projects.map((project) => ({
+    // 2. Get projects where user is a member
+    const memberships = await ProjectMember.find({
+      $or: [
+        { userId: String(userId) },
+        { userEmail: userEmail }
+      ],
+      status: 'active'
+    });
+
+    const memberProjectIds = memberships.map(m => m.projectId);
+
+    const sharedProjects = await Project.find({
+      _id: { $in: memberProjectIds }
+    }).sort({ createdAt: -1 });
+
+    // 3. Merge and deduplicate
+    const allProjects = [...ownedProjects];
+
+    // Add shared projects if not already in list (though they shouldn't be if you're the owner)
+    sharedProjects.forEach(project => {
+      if (!allProjects.find(p => p._id.toString() === project._id.toString())) {
+        allProjects.push(project);
+      }
+    });
+
+    // Sort combined list by createdAt desc
+    allProjects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return allProjects.map((project) => ({
       id: project._id.toString(),
       title: project.title,
       description: project.description || '',
       ownerId: String(project.ownerId),
       createdAt: project.createdAt.toISOString(),
+      isShared: String(project.ownerId) !== String(userId) // Add flag for UI
     }));
   } catch (error) {
     console.error('Get Projects Error:', error);
@@ -118,25 +151,8 @@ export async function getUserProjects() {
   const session = await getSession();
   if (!session || !session.userId) return [];
 
-  try {
-    await connectDB();
-
-    const userId = String(session.userId);
-
-    const projects = await Project.find({ ownerId: userId }).sort({
-      createdAt: -1,
-    });
-
-    return projects.map((p) => ({
-      id: p._id.toString(),
-      title: p.title,
-      description: p.description,
-      createdAt: p.createdAt,
-    }));
-  } catch (error) {
-    console.error('Fetch Projects Error:', error);
-    return [];
-  }
+  // Redirect to the new function which handles shared projects
+  return getProjects(session.userId);
 }
 
 // 3. Get Single Project (For Board View)
@@ -150,19 +166,44 @@ export async function getProject(projectId) {
     if (!mongoose.Types.ObjectId.isValid(projectId)) return null;
 
     const userId = String(session.userId);
+    const userEmail = session.email;
 
+    // Check if owner
     const project = await Project.findOne({
       _id: projectId,
-      ownerId: userId,
     });
 
     if (!project) return null;
 
-    return {
-      id: project._id.toString(),
-      title: project.title,
-      description: project.description,
-    };
+    if (String(project.ownerId) === userId) {
+      return {
+        id: project._id.toString(),
+        title: project.title,
+        description: project.description,
+        isOwner: true
+      };
+    }
+
+    // Check if member
+    const membership = await ProjectMember.findOne({
+      projectId,
+      $or: [
+        { userId: userId },
+        { userEmail: userEmail }
+      ],
+      status: 'active'
+    });
+
+    if (membership) {
+      return {
+        id: project._id.toString(),
+        title: project.title,
+        description: project.description,
+        isOwner: false
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error('Get Project Error:', error);
     return null;

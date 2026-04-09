@@ -20,6 +20,11 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [userRole, setUserRole] = useState('owner');
   const portalRef = useRef(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     async function loadUserRole() {
@@ -66,7 +71,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     () => columns.sort((a, b) => a.order - b.order).map((c) => c.key),
     [columns]
   );
-   //deadline
+  //deadline
   function isOverdue(deadline) {
     if (!deadline) return false;
     return new Date(deadline) < new Date();
@@ -84,7 +89,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     if (diffDays === 1) return 'Tomorrow';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
-    //drag and drop
+  //drag and drop
   async function onDragEnd(result) {
     const { destination, source, draggableId, type } = result;
     if (!destination) return;
@@ -187,6 +192,8 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
     );
   }
 
+  if (!isMounted) return null;
+
   return (
     <>
       {/* Premium Background */}
@@ -214,7 +221,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                 </svg>
                 <span className="font-semibold">Back</span>
               </Link>
-              
+
               <div className="relative w-12 h-12">
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#78e0dc] to-[#ff8d4c] animate-spin-slow opacity-80"></div>
                 <div className="absolute inset-[2px] rounded-xl bg-gradient-to-br from-[#3d348b] to-[#1a1640] flex items-center justify-center">
@@ -270,14 +277,13 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                               style={{
                                 ...columnProvided.draggableProps.style,
                               }}
-                              className={`w-80 shrink-0 group/column animate-fade-in-up transition-all duration-300 ${
-                                columnSnapshot.isDragging ? 'scale-105 rotate-2' : ''
-                              }`}
+                              className={`w-80 shrink-0 group/column animate-fade-in-up transition-all duration-300 ${columnSnapshot.isDragging ? 'scale-105 rotate-2' : ''
+                                }`}
                             >
                               {/* Glass Column */}
                               <div className="relative">
                                 <div className={`absolute -inset-[1px] bg-gradient-to-b from-white/30 to-white/10 rounded-2xl blur-sm transition-opacity duration-300 ${columnSnapshot.isDragging ? 'opacity-100' : 'opacity-0 group-hover/column:opacity-100'}`}></div>
-                                
+
                                 <div className="relative bg-gradient-to-br from-white/[0.15] to-white/[0.05] backdrop-blur-xl rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.2)] overflow-hidden">
                                   {/* Shimmer effect */}
                                   <div className="absolute inset-0 -translate-x-full group-hover/column:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
@@ -314,9 +320,8 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                       <div
                                         ref={provided.innerRef}
                                         {...provided.droppableProps}
-                                        className={`relative z-10 p-3 space-y-3 min-h-[200px] transition-colors duration-300 ${
-                                          snapshot.isDraggingOver ? 'bg-[#78e0dc]/10' : ''
-                                        }`}
+                                        className={`relative z-10 p-3 space-y-3 min-h-[200px] transition-colors duration-300 ${snapshot.isDraggingOver ? 'bg-[#78e0dc]/10' : ''
+                                          }`}
                                       >
                                         {col.tasks.map((task, taskIndex) => (
                                           <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
@@ -334,15 +339,15 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                 >
                                                   {/* Task Card Glow */}
                                                   <div className={`absolute -inset-[1px] bg-gradient-to-r from-[#78e0dc]/50 to-[#ff8d4c]/50 rounded-xl opacity-0 group-hover/task:opacity-100 blur transition-opacity duration-300 ${dragSnapshot.isDragging ? 'opacity-100' : ''}`}></div>
-                                                  
+
                                                   {/* Task Card */}
-                                                  <div className={`relative bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 cursor-pointer transition-all duration-300 hover:scale-[1.02] ${
-                                                    dragSnapshot.isDragging ? 'scale-105 shadow-[0_20px_40px_rgba(120,224,220,0.3)] rotate-3' : 'shadow-lg'
-                                                  }`}>
+                                                  <div className={`relative bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 cursor-pointer transition-all duration-300 hover:scale-[1.02] ${dragSnapshot.isDragging ? 'scale-105 shadow-[0_20px_40px_rgba(120,224,220,0.3)] rotate-3' : 'shadow-lg'
+                                                    }`}>
                                                     {/* Delete Button */}
                                                     <button
-                                                      onClick={(e) => {
+                                                      onPointerDown={(e) => {
                                                         e.stopPropagation();
+                                                        e.preventDefault();
                                                         handleDeleteTask(task.id);
                                                       }}
                                                       disabled={deletingTaskId === task.id}
@@ -369,11 +374,10 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                     {/* Deadline Badge */}
                                                     {task.deadline && (
                                                       <div className="mt-3">
-                                                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${
-                                                          isOverdue(task.deadline)
-                                                            ? 'bg-red-500/20 text-red-200 border border-red-400/30'
-                                                            : 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
-                                                        }`}>
+                                                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${isOverdue(task.deadline)
+                                                          ? 'bg-red-500/20 text-red-200 border border-red-400/30'
+                                                          : 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
+                                                          }`}>
                                                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                           </svg>
@@ -426,7 +430,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                   {provided.placeholder}
 
                   <div className="shrink-0">
-                    <dumnForm projectId={project.id} onCreated={handleColumnCreated} />
+                    <AddColumnForm projectId={project.id} onCreated={handleColumnCreated} />
                   </div>
                 </div>
               )}

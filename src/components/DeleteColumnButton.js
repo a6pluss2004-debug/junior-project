@@ -33,7 +33,7 @@ export default function DeleteColumnButton({ columnId, projectId, columnTitle, o
 
   return (
     <button
-      onClick={handleDelete}
+      onPointerDown={handleDelete}
       disabled={isDeleting}
       className="p-1 rounded text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
       title="Delete column"

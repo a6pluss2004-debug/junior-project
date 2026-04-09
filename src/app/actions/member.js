@@ -9,6 +9,7 @@ import Project from '@/models/Project';
 import { decrypt } from '@/lib/session';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import User from '@/models/User';
 
 
 // Helper: Get Session
@@ -20,9 +21,8 @@ async function getSession() {
 
 
 // Helper: Check if user has permission
-async function checkPermission(projectId, userId, requiredRoles = ['owner', 'admin']) {
+async function checkPermission(projectId, userId, userEmail, requiredRoles = ['owner', 'admin']) {
   await connectDB();
-
 
   // Check if user is project owner
   const project = await Project.findOne({
@@ -30,20 +30,16 @@ async function checkPermission(projectId, userId, requiredRoles = ['owner', 'adm
     ownerId: String(userId),
   });
 
-
   if (project) return { hasPermission: true, role: 'owner' };
-
 
   // Check member role
   const member = await ProjectMember.findOne({
     projectId,
-    userId: String(userId),
+    $or: [{ userId: String(userId) }, { userEmail: userEmail }],
     status: 'active',
   });
 
-
   if (!member) return { hasPermission: false, role: null };
-
 
   const hasPermission = requiredRoles.includes(member.role);
   return { hasPermission, role: member.role };
@@ -60,10 +56,13 @@ export async function addMember({ projectId, userEmail, role = 'member' }) {
     return { error: 'Missing required fields' };
   }
 
+  // Normalize email
+  userEmail = userEmail.toLowerCase().trim();
+
 
   try {
     // Check permission
-    const { hasPermission } = await checkPermission(projectId, session.userId, ['owner', 'admin']);
+    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin']);
     if (!hasPermission) {
       return { error: 'You do not have permission to add members' };
     }
@@ -83,18 +82,29 @@ export async function addMember({ projectId, userEmail, role = 'member' }) {
       return { error: 'User is already a member of this project' };
     }
 
+    // Check if the user exists in the system
+    const existingUser = await User.findOne({ email: userEmail });
 
-    // Note: In a real app, you'd look up the user by email in your User model
-    // For now, we'll create a pending invitation
-    const newMember = await ProjectMember.create({
+    let newMemberData = {
       projectId,
-      userId: userEmail, // Temporary - should be actual userId
       userEmail,
-      userName: userEmail.split('@')[0], // Temporary - should be actual name
       role,
       invitedBy: String(session.userId),
-      status: 'pending', // They need to accept invitation
-    });
+    };
+
+    if (existingUser) {
+      // If user exists, add them as active immediately with their real ID
+      newMemberData.userId = existingUser._id.toString();
+      newMemberData.userName = existingUser.name;
+      newMemberData.status = 'active';
+    } else {
+      // If user doesn't exist, add as pending with email as ID
+      newMemberData.userId = userEmail;
+      newMemberData.userName = userEmail.split('@')[0];
+      newMemberData.status = 'pending';
+    }
+
+    const newMember = await ProjectMember.create(newMemberData);
 
 
     revalidatePath(`/dashboard/project/${projectId}`);
@@ -129,7 +139,7 @@ export async function getMembers(projectId) {
 
 
     // Check if user has access to this project
-    const { hasPermission } = await checkPermission(projectId, session.userId, [
+    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, [
       'owner',
       'admin',
       'member',
@@ -140,12 +150,16 @@ export async function getMembers(projectId) {
     if (!hasPermission) return [];
 
 
-    const members = await ProjectMember.find({ projectId, status: 'active' }).sort({ createdAt: 1 });
+    // Get all members (active and pending)
+    const members = await ProjectMember.find({
+      projectId,
+      status: { $in: ['active', 'pending'] }
+    }).sort({ createdAt: 1 });
 
 
     // Also get project owner
     const project = await Project.findById(projectId);
-   
+
     // ✅ FIXED: Convert all values to plain strings/primitives
     const allMembers = [
       {
@@ -185,7 +199,7 @@ export async function removeMember(memberId, projectId) {
 
   try {
     // Check permission
-    const { hasPermission } = await checkPermission(projectId, session.userId, ['owner', 'admin']);
+    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin']);
     if (!hasPermission) {
       return { error: 'You do not have permission to remove members' };
     }
@@ -214,7 +228,7 @@ export async function updateMemberRole(memberId, projectId, newRole) {
 
   try {
     // Only owner can change roles
-    const { hasPermission } = await checkPermission(projectId, session.userId, ['owner']);
+    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner']);
     if (!hasPermission) {
       return { error: 'Only project owner can change roles' };
     }
@@ -242,7 +256,7 @@ export async function getUserRole(projectId) {
 
 
   try {
-    const { role } = await checkPermission(projectId, session.userId, ['owner', 'admin', 'member', 'guest']);
+    const { role } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin', 'member', 'guest']);
     return role;
   } catch (error) {
     console.error('Get User Role Error:', error);

@@ -107,7 +107,7 @@ export default function ShareModal({ projectId, projectTitle, userRole, onClose 
         <div className="relative group">
           {/* Animated border gradient */}
           <div className="absolute -inset-[2px] bg-gradient-to-r from-[#78e0dc]/50 via-[#ff8d4c]/50 to-[#3d348b]/50 rounded-[28px] blur-sm"></div>
-         
+
           {/* Main glass card */}
           <div className="relative bg-gradient-to-br from-[#3d348b]/95 to-[#1a1640]/95 backdrop-blur-2xl rounded-[26px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/20 overflow-hidden">
             {/* Shimmer effect */}
@@ -231,7 +231,7 @@ export default function ShareModal({ projectId, projectTitle, userRole, onClose 
                       >
                         {/* Member card glow */}
                         <div className="absolute -inset-[1px] bg-gradient-to-r from-[#78e0dc]/30 to-[#ff8d4c]/30 rounded-xl opacity-0 group-hover/member:opacity-100 blur transition-opacity duration-300"></div>
-                       
+
                         <div className="relative flex items-center justify-between bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 transition-all duration-300 group-hover/member:bg-white/10">
                           <div className="flex items-center gap-3">
                             <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-[#78e0dc] to-[#5bcac6] flex items-center justify-center font-black text-[#3d348b] shadow-lg">
@@ -243,6 +243,11 @@ export default function ShareModal({ projectId, projectTitle, userRole, onClose 
                                 {member.role === 'owner' && (
                                   <span className="inline-flex items-center rounded-full bg-[#ff8d4c]/20 px-2 py-0.5 text-xs font-bold text-[#ff8d4c] border border-[#ff8d4c]/30">
                                     You
+                                  </span>
+                                )}
+                                {member.status === 'pending' && (
+                                  <span className="inline-flex items-center rounded-full bg-yellow-400/20 px-2 py-0.5 text-xs font-bold text-yellow-400 border border-yellow-400/30">
+                                    Pending
                                   </span>
                                 )}
                               </p>
