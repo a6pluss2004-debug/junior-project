@@ -109,9 +109,11 @@ export default async function DashboardPage() {
                         <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
                         
                         {/* Delete button - bottom-right */}
-                        <div className="absolute bottom-4 right-4 z-20">
-                          <DeleteProjectButton projectId={project.id} />
-                        </div>
+                        {!project.isShared && (
+                          <div className="absolute bottom-4 right-4 z-20">
+                            <DeleteProjectButton projectId={project.id} />
+                          </div>
+                        )}
 
                         <Link href={`/dashboard/project/${project.id}`} className="block relative z-10">
                           <div className="flex items-start justify-between mb-4">

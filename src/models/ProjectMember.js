@@ -8,25 +8,14 @@ const ProjectMemberSchema = new mongoose.Schema(
       required: true,
     },
     userId: {
-      type: String,
-      required: true,
-    },
-    userEmail: {
-      type: String,
-      required: true,
-    },
-    userName: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       required: true,
     },
     role: {
       type: String,
       enum: ['owner', 'admin', 'member', 'guest'],
       default: 'member',
-    },
-    invitedBy: {
-      type: String,
-      required: true,
     },
     status: {
       type: String,
@@ -40,4 +29,5 @@ const ProjectMemberSchema = new mongoose.Schema(
 // Prevent duplicate members
 ProjectMemberSchema.index({ projectId: 1, userId: 1 }, { unique: true });
 
+delete mongoose.models.ProjectMember;
 export default mongoose.models.ProjectMember || mongoose.model('ProjectMember', ProjectMemberSchema);

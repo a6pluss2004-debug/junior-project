@@ -1,6 +1,7 @@
 'use server';
 
 import connectDB from '@/lib/db';
+import User from '@/models/User';
 import Task from '@/models/Task';
 import Project from '@/models/Project';
 import { decrypt } from '@/lib/session';
@@ -8,6 +9,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import mongoose from 'mongoose';
 import ProjectMember from '@/models/ProjectMember';
+import { checkPermission } from '@/lib/permissions';
 
 // Helper: Get Session
 async function getSession() {
@@ -24,7 +26,7 @@ async function verifyProjectAccess(projectId, userId, userEmail) {
     ownerId: String(userId),
   });
 
-  if (project) return true;
+  if (project) return { hasAccess: true, role: 'owner' };
 
   // 2. Check membership
   const member = await ProjectMember.findOne({
@@ -33,7 +35,8 @@ async function verifyProjectAccess(projectId, userId, userEmail) {
     status: 'active',
   });
 
-  return !!member;
+  if (member) return { hasAccess: true, role: member.role };
+  return { hasAccess: false, role: null };
 }
 
 // 1. Create a Task
@@ -55,9 +58,9 @@ export async function createTask(formData) {
     await connectDB();
 
     // Verify access
-    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!hasAccess) {
+    if (!hasAccess || !checkPermission('create_tasks', role)) {
       return { error: 'Project not found or access denied' };
     }
 
@@ -75,6 +78,7 @@ export async function createTask(formData) {
       projectId,
       order: newOrder,
       deadline: deadline ? new Date(deadline) : null, // ✅ NEW
+      assignedTo: session.userId, // ✅ NEW assigned to creator
     });
 
     revalidatePath(`/dashboard/project/${projectId}`);
@@ -89,6 +93,8 @@ export async function createTask(formData) {
         column: newTask.column,
         order: newTask.order,
         deadline: newTask.deadline ? newTask.deadline.toISOString() : null,
+        assignedTo: newTask.assignedTo ? newTask.assignedTo.toString() : null, // ✅ NEW
+        assigneeName: session.name, // The creator is obviously the assignee at spawn
         createdAt: newTask.createdAt,
       },
     };
@@ -108,11 +114,13 @@ export async function getTasks(projectId) {
 
     // Verify access
     // Verify access
-    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!hasAccess) return [];
+    if (!hasAccess || !checkPermission('view_board', role)) return [];
 
-    const tasks = await Task.find({ projectId }).sort({ order: 1 });
+    const tasks = await Task.find({ projectId })
+      .populate("assignedTo", "name")
+      .sort({ order: 1 });
 
     return tasks.map((task) => ({
       id: task._id.toString(),
@@ -121,6 +129,8 @@ export async function getTasks(projectId) {
       column: task.column,
       order: task.order,
       deadline: task.deadline ? task.deadline.toISOString() : null,
+      assignedTo: task.assignedTo?._id ? task.assignedTo._id.toString() : null,
+      assigneeName: task.assignedTo?.name || null,
       createdAt: task.createdAt,
     }));
   } catch (error) {
@@ -139,9 +149,9 @@ export async function deleteTask(taskId, projectId) {
 
     // Verify ownership
     // Verify access
-    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!hasAccess) return { error: 'Access denied' };
+    if (!hasAccess || !checkPermission('delete_tasks', role)) return { error: 'Access denied' };
 
     await Task.findByIdAndDelete(taskId);
 
@@ -168,8 +178,8 @@ export async function updateTaskPosition({ taskId, projectId, column, order }) {
 
     // Ensure user owns the project
     // Verify access
-    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
-    if (!hasAccess) return { error: 'Access denied' };
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
+    if (!hasAccess || !checkPermission('edit_tasks', role)) return { error: 'Access denied' };
 
     await Task.findByIdAndUpdate(taskId, {
       column,
@@ -197,9 +207,9 @@ export async function updateTask({ taskId, projectId, title, description, deadli
 
     // Verify the user owns this project
     // Verify access
-    const hasAccess = await verifyProjectAccess(projectId, session.userId, session.email);
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
 
-    if (!hasAccess) {
+    if (!hasAccess || !checkPermission('edit_tasks', role)) {
       return { error: 'Project not found or access denied' };
     }
 
@@ -208,10 +218,10 @@ export async function updateTask({ taskId, projectId, title, description, deadli
       {
         title,
         description: description || '',
-        deadline: deadline ? new Date(deadline) : null, // ✅ NEW
+        deadline: deadline ? new Date(deadline) : null,
       },
-      { new: true } // Return the updated document
-    );
+      { new: true }
+    ).populate('assignedTo', 'name');
 
     if (!updatedTask) {
       return { error: 'Task not found' };
@@ -227,7 +237,9 @@ export async function updateTask({ taskId, projectId, title, description, deadli
         description: updatedTask.description,
         column: updatedTask.column,
         order: updatedTask.order,
-        deadline: updatedTask.deadline ? updatedTask.deadline.toISOString() : null, // ✅ Convert to string
+        deadline: updatedTask.deadline ? updatedTask.deadline.toISOString() : null,
+        assignedTo: updatedTask.assignedTo?._id ? updatedTask.assignedTo._id.toString() : null,
+        assigneeName: updatedTask.assignedTo?.name || null,
         createdAt: updatedTask.createdAt,
       },
     };
@@ -236,3 +248,59 @@ export async function updateTask({ taskId, projectId, title, description, deadli
     return { error: 'Failed to update task' };
   }
 }
+
+// 6. Reassign Task (Update assignedTo property)
+export async function reassignTask({ taskId, projectId, assignedTo }) {
+  const session = await getSession();
+  if (!session) return { error: 'Unauthorized' };
+
+  if (!taskId || !projectId) {
+    return { error: 'Missing required fields' };
+  }
+
+  try {
+    await connectDB();
+
+    const { hasAccess, role } = await verifyProjectAccess(projectId, session.userId, session.email);
+
+    if (!hasAccess || !checkPermission('edit_tasks', role)) {
+      return { error: "Only those with edit permissions can reassign tasks" };
+    }
+
+    if (assignedTo !== null) {
+      const isMember = await ProjectMember.exists({
+        projectId,
+        userId: assignedTo,
+      });
+      const isProjectOwner = await Project.exists({
+        _id: projectId,
+        ownerId: assignedTo,
+      });
+      if (!isMember && !isProjectOwner) {
+        return { error: "You can only assign tasks to existing project members" };
+      }
+    }
+
+    const updatedTask = await Task.findByIdAndUpdate(taskId, { assignedTo }, { new: true }).populate('assignedTo', 'name');
+    revalidatePath(`/dashboard/project/${projectId}`);
+
+    return {
+      success: true,
+      task: {
+        id: updatedTask._id.toString(),
+        title: updatedTask.title,
+        description: updatedTask.description,
+        column: updatedTask.column,
+        order: updatedTask.order,
+        deadline: updatedTask.deadline ? updatedTask.deadline.toISOString() : null,
+        assignedTo: updatedTask.assignedTo?._id ? updatedTask.assignedTo._id.toString() : null,
+        assigneeName: updatedTask.assignedTo?.name || null,
+        createdAt: updatedTask.createdAt,
+      }
+    };
+  } catch (error) {
+    console.error('Reassign Task Error:', error);
+    return { error: 'Failed to reassign task' };
+  }
+}
+

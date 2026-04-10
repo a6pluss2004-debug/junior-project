@@ -4,14 +4,16 @@ import { useState, useEffect } from 'react';
 import { updateTask } from '@/app/actions/task';
 import CommentList from '@/components/CommentList';
 import AttachmentList from '@/components/AttachmentList';
+import AssigneeSelector from '@/components/AssigneeSelector';
 
-export default function EditTaskModal({ task, onClose, onUpdated }) {
+export default function EditTaskModal({ task, onClose, onUpdated, userRole }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
   const [deadline, setDeadline] = useState(
     task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentAssigneeId, setCurrentAssigneeId] = useState(task.assignedTo);
 
   useEffect(() => {
     function handleEscape(e) {
@@ -177,6 +179,19 @@ export default function EditTaskModal({ task, onClose, onUpdated }) {
                     </button>
                   )}
                 </div>
+
+                <AssigneeSelector
+                  projectId={task.projectId}
+                  taskId={task.id}
+                  currentAssigneeId={currentAssigneeId}
+                  userRole={userRole}
+                  onAssigned={(updatedTask) => {
+                    if (updatedTask) {
+                      setCurrentAssigneeId(updatedTask.assignedTo);
+                      if (onUpdated) onUpdated(updatedTask);
+                    }
+                  }}
+                />
 
                 {/* Task Info Grid */}
                 <div className="grid grid-cols-2 gap-4">

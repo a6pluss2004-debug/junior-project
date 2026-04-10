@@ -21,7 +21,7 @@ async function getSession() {
 
 
 // Helper: Check if user has permission
-async function checkPermission(projectId, userId, userEmail, requiredRoles = ['owner', 'admin']) {
+async function checkProjectAccess(projectId, userId, userEmail, requiredRoles = ['owner', 'admin']) {
   await connectDB();
 
   // Check if user is project owner
@@ -62,7 +62,7 @@ export async function addMember({ projectId, userEmail, role = 'member' }) {
 
   try {
     // Check permission
-    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin']);
+    const { hasPermission } = await checkProjectAccess(projectId, session.userId, session.email, ['owner', 'admin']);
     if (!hasPermission) {
       return { error: 'You do not have permission to add members' };
     }
@@ -139,7 +139,7 @@ export async function getMembers(projectId) {
 
 
     // Check if user has access to this project
-    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, [
+    const { hasPermission } = await checkProjectAccess(projectId, session.userId, session.email, [
       'owner',
       'admin',
       'member',
@@ -199,7 +199,7 @@ export async function removeMember(memberId, projectId) {
 
   try {
     // Check permission
-    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin']);
+    const { hasPermission } = await checkProjectAccess(projectId, session.userId, session.email, ['owner', 'admin']);
     if (!hasPermission) {
       return { error: 'You do not have permission to remove members' };
     }
@@ -228,7 +228,7 @@ export async function updateMemberRole(memberId, projectId, newRole) {
 
   try {
     // Only owner can change roles
-    const { hasPermission } = await checkPermission(projectId, session.userId, session.email, ['owner']);
+    const { hasPermission } = await checkProjectAccess(projectId, session.userId, session.email, ['owner']);
     if (!hasPermission) {
       return { error: 'Only project owner can change roles' };
     }
@@ -256,7 +256,7 @@ export async function getUserRole(projectId) {
 
 
   try {
-    const { role } = await checkPermission(projectId, session.userId, session.email, ['owner', 'admin', 'member', 'guest']);
+    const { role } = await checkProjectAccess(projectId, session.userId, session.email, ['owner', 'admin', 'member', 'guest']);
     return role;
   } catch (error) {
     console.error('Get User Role Error:', error);

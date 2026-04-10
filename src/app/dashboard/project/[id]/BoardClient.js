@@ -10,7 +10,39 @@ import AddTaskForm from '@/components/AddTaskForm';
 import AddColumnForm from '@/components/AddColumnForm';
 import DeleteColumnButton from '@/components/DeleteColumnButton';
 import EditTaskModal from '@/components/EditTaskModal';
-import ShareModal from '@/components/ShareModal';
+import ShareProjectModal from '@/components/ShareProjectModal';
+import { checkPermission } from '@/lib/permissions';
+import { useTaskRisk } from '@/hooks/useTaskRisk';
+import RiskBadge from '@/components/RiskBadge';
+
+// Wrapper to display risk badge for individual task cards
+function TaskRiskBadge({ task }) {
+  const { risk, loading } = useTaskRisk(task);
+
+  // Only show for tasks with deadlines
+  if (!task.deadline) return null;
+
+  if (loading) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                       bg-gray-100 text-gray-400 text-xs border border-gray-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 animate-pulse" />
+        Analyzing...
+      </span>
+    );
+  }
+
+  if (!risk) return null;
+
+  return (
+    <RiskBadge
+      riskLevel={risk.risk_level}
+      score={risk.risk_score}
+      reason={risk.reason}
+      suggestions={risk.suggestions}
+    />
+  );
+}
 
 export default function BoardClient({ project, initialTasks, initialColumns }) {
   const [tasks, setTasks] = useState(initialTasks);
@@ -25,6 +57,12 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const canManageColumns = checkPermission('manage_columns', userRole);
+  const canCreateTasks = checkPermission('create_tasks', userRole);
+  const canEditTasks = checkPermission('edit_tasks', userRole);
+  const canDeleteTasks = checkPermission('delete_tasks', userRole);
+  const canInviteMembers = checkPermission('invite_members', userRole);
 
   useEffect(() => {
     async function loadUserRole() {
@@ -237,18 +275,22 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="group/button relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-[#78e0dc] to-[#5bcac6]"></div>
-              <div className="relative px-5 py-2.5 flex items-center gap-2">
-                <svg className="w-4 h-4 text-[#3d348b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                <span className="text-sm font-black text-[#3d348b]">Share</span>
-              </div>
-            </button>
+            <div className="flex items-center gap-4">
+              {canInviteMembers && (
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  className="group/button relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105"
+                >
+                <div className="absolute inset-0 bg-gradient-to-r from-[#78e0dc] to-[#5bcac6]"></div>
+                <div className="relative px-5 py-2.5 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[#3d348b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  <span className="text-sm font-black text-[#3d348b]">Share</span>
+                </div>
+              </button>
+              )}
+          </div>
           </div>
         </header>
 
@@ -268,7 +310,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                     const showAdd = col.key === 'todo';
 
                     return (
-                      <Draggable key={col.id} draggableId={col.key} index={index}>
+                      <Draggable key={col.id} draggableId={col.key} index={index} isDragDisabled={!canManageColumns}>
                         {(columnProvided, columnSnapshot) => {
                           const columnElement = (
                             <div
@@ -277,7 +319,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                               style={{
                                 ...columnProvided.draggableProps.style,
                               }}
-                              className={`w-80 shrink-0 group/column animate-fade-in-up transition-all duration-300 ${columnSnapshot.isDragging ? 'scale-105 rotate-2' : ''
+                              className={`w-80 shrink-0 group/column animate-fade-in-up ${columnSnapshot.isDragging ? 'scale-105 rotate-2' : ''
                                 }`}
                             >
                               {/* Glass Column */}
@@ -305,12 +347,14 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                       <span className="px-2.5 py-1 rounded-full bg-[#ff8d4c]/20 text-xs font-bold text-[#ff8d4c] backdrop-blur-sm border border-[#ff8d4c]/30">
                                         {col.tasks.length}
                                       </span>
-                                      <DeleteColumnButton
-                                        columnId={col.id}
-                                        projectId={project.id}
-                                        columnTitle={col.title}
-                                        onDeleted={handleColumnDeleted}
-                                      />
+                                      {canManageColumns && (
+                                        <DeleteColumnButton
+                                          columnId={col.id}
+                                          projectId={project.id}
+                                          columnTitle={col.title}
+                                          onDeleted={handleColumnDeleted}
+                                        />
+                                      )}
                                     </div>
                                   </div>
 
@@ -324,7 +368,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                           }`}
                                       >
                                         {col.tasks.map((task, taskIndex) => (
-                                          <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                          <Draggable key={task.id} draggableId={task.id} index={taskIndex} isDragDisabled={!canEditTasks}>
                                             {(dragProvided, dragSnapshot) => {
                                               const taskElement = (
                                                 <div
@@ -334,7 +378,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                   style={{
                                                     ...dragProvided.draggableProps.style,
                                                   }}
-                                                  onClick={() => !dragSnapshot.isDragging && handleTaskClick(task)}
+                                                  onClick={() => canEditTasks && !dragSnapshot.isDragging && handleTaskClick(task)}
                                                   className="group/task relative"
                                                 >
                                                   {/* Task Card Glow */}
@@ -343,9 +387,9 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                   {/* Task Card */}
                                                   <div className={`relative bg-gradient-to-br from-white/20 to-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 cursor-pointer transition-all duration-300 hover:scale-[1.02] ${dragSnapshot.isDragging ? 'scale-105 shadow-[0_20px_40px_rgba(120,224,220,0.3)] rotate-3' : 'shadow-lg'
                                                     }`}>
-                                                    {/* Delete Button */}
-                                                    <button
-                                                      onPointerDown={(e) => {
+                                                    {canDeleteTasks && (
+                                                      <button
+                                                        onPointerDown={(e) => {
                                                         e.stopPropagation();
                                                         e.preventDefault();
                                                         handleDeleteTask(task.id);
@@ -362,18 +406,31 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                         </svg>
-                                                      )}
-                                                    </button>
+                                                        )}
+                                                      </button>
+                                                    )}
 
                                                     {/* Task Title in TEAL */}
                                                     <div className="font-bold text-[#78e0dc] pr-8 mb-1">{task.title}</div>
+                                                    
+                                                    {/* Show assignee initials avatar if task is assigned */}
+                                                    {task.assignedTo && task.assigneeName && (
+                                                      <div className="flex items-center gap-1 mt-1.5 mb-2">
+                                                        <div className="w-5 h-5 rounded-full bg-[#78e0dc]/20 text-[#78e0dc] text-xs
+                                                                        font-bold flex items-center justify-center">
+                                                          {task.assigneeName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="text-xs text-white/60 font-medium">{task.assigneeName}</span>
+                                                      </div>
+                                                    )}
+
                                                     {task.description && (
                                                       <div className="text-xs text-white/70 line-clamp-2 mb-2">{task.description}</div>
                                                     )}
 
                                                     {/* Deadline Badge */}
                                                     {task.deadline && (
-                                                      <div className="mt-3">
+                                                      <div className="mt-3 flex items-center gap-2 flex-wrap">
                                                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold backdrop-blur-sm ${isOverdue(task.deadline)
                                                           ? 'bg-red-500/20 text-red-200 border border-red-400/30'
                                                           : 'bg-blue-500/20 text-blue-200 border border-blue-400/30'
@@ -383,6 +440,8 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
                                                           </svg>
                                                           {formatDeadline(task.deadline)}
                                                         </span>
+                                                        {/* AI Risk Badge */}
+                                                        <TaskRiskBadge task={task} />
                                                       </div>
                                                     )}
                                                   </div>
@@ -400,7 +459,7 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
 
                                         {provided.placeholder}
 
-                                        {showAdd && (
+                                        {showAdd && canCreateTasks && (
                                           <div className="pt-2">
                                             <AddTaskForm
                                               projectId={project.id}
@@ -429,9 +488,11 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
 
                   {provided.placeholder}
 
-                  <div className="shrink-0">
-                    <AddColumnForm projectId={project.id} onCreated={handleColumnCreated} />
-                  </div>
+                  {canManageColumns && (
+                    <div className="shrink-0">
+                      <AddColumnForm projectId={project.id} onCreated={handleColumnCreated} />
+                    </div>
+                  )}
                 </div>
               )}
             </Droppable>
@@ -443,16 +504,15 @@ export default function BoardClient({ project, initialTasks, initialColumns }) {
       {editingTask && (
         <EditTaskModal
           task={editingTask}
+          userRole={userRole}
           onClose={() => setEditingTask(null)}
           onUpdated={handleTaskUpdated}
         />
       )}
 
       {showShareModal && (
-        <ShareModal
+        <ShareProjectModal
           projectId={project.id}
-          projectTitle={project.title}
-          userRole={userRole}
           onClose={() => setShowShareModal(false)}
         />
       )}

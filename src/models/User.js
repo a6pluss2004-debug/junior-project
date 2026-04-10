@@ -5,6 +5,7 @@
       type: String,
       required: [true, 'Please provide a name'],
       maxlength: [60, 'Name cannot be more than 60 characters'],
+      unique: true,
     },
     email: {
       type: String,

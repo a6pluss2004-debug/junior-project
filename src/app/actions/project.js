@@ -10,6 +10,8 @@ import mongoose from 'mongoose';
 
 // NEW: import Column model
 import Column from '@/models/Column';
+import { checkPermission } from '@/lib/permissions';
+import { getUserRole } from '@/app/actions/member';
 
 // Helper: Get current user session
 async function getSession() {
@@ -260,13 +262,9 @@ export async function createColumn(projectId, title) {
 
     const userId = String(session.userId);
 
-    // Verify user owns this project
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: userId,
-    });
+    const role = await getUserRole(projectId);
 
-    if (!project) {
+    if (!checkPermission('manage_columns', role)) {
       return { error: 'Project not found or unauthorized' };
     }
 
@@ -316,13 +314,9 @@ export async function deleteColumn(columnId, projectId) {
 
     const userId = String(session.userId);
 
-    // Verify user owns the project
-    const project = await Project.findOne({
-      _id: projectId,
-      ownerId: userId,
-    });
+    const role = await getUserRole(projectId);
 
-    if (!project) {
+    if (!checkPermission('manage_columns', role)) {
       return { error: 'Project not found or unauthorized' };
     }
 
